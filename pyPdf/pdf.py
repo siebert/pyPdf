@@ -669,9 +669,9 @@ class PdfFileReader(object):
     def _decryptObject(self, obj, key):
         if isinstance(obj, ByteStringObject) or isinstance(obj, TextStringObject):
             obj = createStringObject(utils.RC4_encrypt(key, obj.original_bytes))
-        elif isinstance(obj, StreamObject):
-            obj._data = utils.RC4_encrypt(key, obj._data)
-        elif isinstance(obj, DictionaryObject):
+        elif isinstance(obj, StreamObject) or isinstance(obj, DictionaryObject):
+            if isinstance(obj, StreamObject):
+                obj._data = utils.RC4_encrypt(key, obj._data)
             for dictkey, value in obj.items():
                 obj[dictkey] = self._decryptObject(value, key)
         elif isinstance(obj, ArrayObject):
@@ -935,7 +935,7 @@ class PdfFileReader(object):
         owner_entry = encrypt['/O'].getObject().original_bytes
         p_entry = encrypt['/P'].getObject()
         id_entry = self.trailer['/ID'].getObject()
-        id1_entry = id_entry[0].getObject()
+        id1_entry = id_entry[0].getObject().original_bytes
         if rev == 2:
             U, key = _alg34(password, owner_entry, p_entry, id1_entry)
         elif rev >= 3:
@@ -944,7 +944,8 @@ class PdfFileReader(object):
                     p_entry, id1_entry,
                     encrypt.get("/EncryptMetadata", BooleanObject(False)).getObject())
         real_U = encrypt['/U'].getObject().original_bytes
-        return U == real_U, key
+        compareLength = encrypt["/Length"].getObject() / 8 if rev >= 3 else len(real_U)
+        return U[:compareLength] == real_U[:compareLength], key
 
     def getIsEncrypted(self):
         return self.trailer.has_key("/Encrypt")
